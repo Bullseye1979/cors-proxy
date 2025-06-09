@@ -1,15 +1,14 @@
 {
   "name": "download-proxy-server",
   "version": "1.0.0",
-  "description": "Proxyserver zum Herunterladen und temporären Bereitstellen von Dateien ohne CORS.",
+  "description": "Simple proxy with double-decode and auto-cleanup",
   "main": "proxy-server.js",
-  "scripts": {
-    "start": "node proxy-server.js"
-  },
-  "author": "Bullseye1979",
-  "license": "MIT",
+  "scripts": { "start": "node proxy-server.js" },
   "dependencies": {
     "express": "^4.18.4",
-    "node-fetch": "^2.6.9"
-  }
+    "node-fetch": "^2.6.9",
+    "cors": "^2.8.5"
+  },
+  "author": "Bullseye1979",
+  "license": "MIT"
 }
