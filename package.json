@@ -1,14 +1,16 @@
 {
   "name": "download-proxy-server",
   "version": "1.0.0",
-  "description": "Simple proxy with double-decode and auto-cleanup",
+  "description": "CORS-Proxy mit Base64-URL, automatischem Cleanup.",
   "main": "proxy-server.js",
-  "scripts": { "start": "node proxy-server.js" },
+  "scripts": {
+    "start": "node proxy-server.js"
+  },
+  "author": "Bullseye1979",
+  "license": "MIT",
   "dependencies": {
     "express": "^4.18.4",
     "node-fetch": "^2.6.9",
     "cors": "^2.8.5"
-  },
-  "author": "Bullseye1979",
-  "license": "MIT"
+  }
 }
