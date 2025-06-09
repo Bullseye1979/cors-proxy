@@ -9,16 +9,15 @@ const app = express();
 const PORT = 33210;
 const DOWNLOAD_DIR = path.join(__dirname, "downloads");
 
-// Initialisierung
 if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR);
 
-// CORS global aktivieren
+// CORS global aktivieren für Browserzugriffe
 app.use(cors({ origin: "*", methods: ["GET", "OPTIONS"], allowedHeaders: ["Content-Type"] }));
 
-// Optional: Falls TLS-Fehler mit Azure – unsicher, nur bei Bedarf aktivieren
+// Optional: bei TLS-Problemen aktivieren (nur wenn nötig)
 // process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
-// Aufräumroutine jede Stunde
+// Routinen: Alte Dateien (>24 h) jede Stunde löschen
 setInterval(() => {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   fs.readdir(DOWNLOAD_DIR, (err, files) => {
@@ -28,7 +27,7 @@ setInterval(() => {
       fs.stat(fp, (err, stats) => {
         if (!err && stats.mtimeMs < cutoff) {
           fs.unlink(fp, err => {
-            if (!err) console.log(`[Cleanup] Alte Datei gelöscht: ${file}`);
+            if (!err) console.log(`[Cleanup] Lösche: ${file}`);
           });
         }
       });
@@ -36,35 +35,36 @@ setInterval(() => {
   });
 }, 60 * 60 * 1000);
 
-// Download-Handler für "/" und "/download"
+// Base64-Decodierungs-Handler
 async function downloadHandler(req, res) {
+  const b64 = req.query.b64;
+  const fileName = req.query.name;
+  if (!b64 || !fileName) return res.status(400).send("Missing 'b64' or 'name'");
+
+  let targetUrl;
   try {
-    let raw = req.query.url;
-    const fileName = req.query.name;
-    if (!raw || !fileName) return res.status(400).send("Fehlende Parameter 'url' oder 'name'.");
+    targetUrl = Buffer.from(b64, "base64").toString("utf-8");
+  } catch {
+    return res.status(400).send("Invalid base64");
+  }
 
-    // Doppelt-dekodieren
-    while (raw.includes("%25")) raw = decodeURIComponent(raw);
-    const targetUrl = decodeURIComponent(raw);
+  console.log(`[Proxy] Dekodierte URL: ${targetUrl}`);
+  console.log(`[Proxy] Filename: ${fileName}`);
 
-    console.log(`[Proxy] Ziel-URL: ${targetUrl}`);
-    console.log(`[Proxy] Speicherpfad: ${fileName}`);
-
+  try {
     const response = await fetch(targetUrl);
     if (!response.ok) {
-      console.error(`[Proxy] Fetch-Fehler (${response.status}): ${response.statusText}`);
-      return res.status(502).send("Failed to fetch file.");
+      console.error(`[Proxy] Fetch-Fehler (${response.status}):`, response.statusText);
+      return res.status(502).send("Failed to fetch file");
     }
-
     const buffer = await response.buffer();
     const fp = path.join(DOWNLOAD_DIR, fileName);
     fs.writeFileSync(fp, buffer);
-    console.log(`[Proxy] Datei gespeichert: ${fileName}`);
-
+    console.log(`[Proxy] Gespeichert: ${fileName}`);
     res.sendFile(fp);
   } catch (err) {
-    console.error("[Proxy] Unerwarteter Fehler:", err);
-    res.status(500).send("Serverfehler.");
+    console.error("[Proxy] Fehler:", err);
+    res.status(500).send("Internal server error");
   }
 }
 
