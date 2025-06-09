@@ -3,74 +3,67 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const fetch = require("node-fetch");
+const cors = require("cors");
+
 const app = express();
 const PORT = 33210;
-
 const DOWNLOAD_DIR = path.join(__dirname, "downloads");
+
+// Download-Verzeichnis anlegen, falls nicht vorhanden
 if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR);
 
-// Middleware: CORS deaktivieren
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  next();
-});
+// CORS aktivieren für alle Routen
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "OPTIONS"],
+  allowedHeaders: ["Content-Type"]
+}));
 
-// Download-Endpunkt
-app.get("/download", async (req, res) => {
-  const fileUrl = req.query.url;
-  const fileName = req.query.name;
-
-  if (!fileUrl || !fileName || !fileUrl.startsWith("http")) {
-    return res.status(400).send("Missing or invalid parameters.");
-  }
-
-  const filePath = path.join(DOWNLOAD_DIR, fileName);
-
-  try {
-    const response = await fetch(fileUrl);
-    if (!response.ok) throw new Error("Failed to fetch file.");
-
-    const buffer = await response.buffer();
-    fs.writeFileSync(filePath, buffer);
-
-    console.log(`Downloaded: ${fileName}`);
-
-    // Zeitstempel speichern für automatische Löschung
-    fs.utimesSync(filePath, new Date(), new Date());
-
-    res.json({ success: true, file: `/files/${fileName}` });
-  } catch (err) {
-    console.error("Download error:", err);
-    res.status(500).send("Download failed.");
-  }
-});
-
-// Statische Datei-Ausgabe
-app.use("/files", express.static(DOWNLOAD_DIR));
-
-// Cleanup-Job: Alle 1 Stunde prüfen, ob Dateien älter als 24h sind
+// Cleanup-Funktion: lösche Dateien älter als 24 Stunden
 setInterval(() => {
-  const now = Date.now();
-  const cutoff = now - 24 * 60 * 60 * 1000;
-
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   fs.readdir(DOWNLOAD_DIR, (err, files) => {
     if (err) return console.error("Cleanup error:", err);
-
     files.forEach(file => {
-      const filePath = path.join(DOWNLOAD_DIR, file);
-      fs.stat(filePath, (err, stats) => {
-        if (err) return;
-
-        if (stats.mtimeMs < cutoff) {
-          fs.unlink(filePath, err => {
-            if (!err) console.log(`Deleted expired file: ${file}`);
-          });
+      const fp = path.join(DOWNLOAD_DIR, file);
+      fs.stat(fp, (err, stats) => {
+        if (!err && stats.mtimeMs < cutoff) {
+          fs.unlink(fp, err => !err && console.log(`Deleted old file: ${file}`));
         }
       });
     });
   });
-}, 60 * 60 * 1000); // alle Stunde
+}, 60 * 60 * 1000);
+
+// Download-Handler für "/" und "/download"
+const downloadHandler = async (req, res) => {
+  let rawUrl = req.query.url;
+  const fileName = req.query.name;
+  if (!rawUrl || !fileName) return res.status(400).send("Missing 'url' or 'name'");
+
+  try {
+    // Doppelte Kodierung entfernen
+    while (rawUrl.includes("%25")) rawUrl = decodeURIComponent(rawUrl);
+    const targetUrl = decodeURIComponent(rawUrl);
+
+    const response = await fetch(targetUrl);
+    if (!response.ok) return res.status(502).send("Failed to fetch file");
+
+    const buffer = await response.buffer();
+    const fp = path.join(DOWNLOAD_DIR, fileName);
+    fs.writeFileSync(fp, buffer);
+    console.log(`Downloaded: ${fileName}`);
+    res.sendFile(fp);
+  } catch (err) {
+    console.error("Download error:", err);
+    res.status(500).send("Server error");
+  }
+};
+
+// Route registrieren
+app.get("/", downloadHandler);
+app.get("/download", downloadHandler);
 
 app.listen(PORT, () => {
-  console.log(`Proxy server running at http://localhost:${PORT}`);
+  console.log(`Proxy server running on port ${PORT}`);
 });
