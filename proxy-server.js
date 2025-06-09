@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const fetch = require("node-fetch");
 const app = express();
-const PORT = 30000;
+const PORT = 33210;
 
 const DOWNLOAD_DIR = path.join(__dirname, "downloads");
 if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR);
